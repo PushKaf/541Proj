@@ -4,12 +4,11 @@
 import Database
 import Menulib
 from rediStuff import create_index
-from const import ISSUE_TABLE, ISSUE_SCHEMA
+from const import ISSUE_TABLE, ISSUE_SCHEMA, BOOK_RECORD_TABLE, BOOK_RECORD_SCHEMA, MEMBER_TABLE, MEMBER_SCHEMA
 
 Database.DatabaseCreate()
 Database.TablesCreate()
 
-client = create_index(f"{ISSUE_TABLE}-idx", ISSUE_TABLE, ISSUE_SCHEMA)
 
 while True:
     # time.sleep(5)
@@ -26,7 +25,7 @@ while True:
     elif choice == 2:
         Menulib.MenuMember()
     elif choice == 3:
-        Menulib.MenuIssueReturn(client)
+        Menulib.MenuIssueReturn(Database.issue_client)
     elif choice == 4:
         break
     else:
