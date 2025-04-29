@@ -418,6 +418,7 @@ def _does_bno_exist(r, bno):
 
 def search_books():
     bno = search_entry.get()
+    
     if not bno:
         messagebox.showwarning("Input Error", "Please enter a Book Code or Name.")
         return
