@@ -1,7 +1,7 @@
 #Project on Library Management System
 #--------------------------------------------------------------------------------
 #MODULE : LIBRARY MANAGEMENT
-
+from tkinter import simpledialog
 import tkinter as tk
 from tkinter import messagebox
 import redis
@@ -14,12 +14,13 @@ from flask import Flask, request, jsonify, render_template
 from const import REDIS_HOST, REDIS_PORT, ISSUE_TABLE
 from rediStuff import search_by
 
+
 app = Flask(__name__)
 
 # Redis configuration (Update with your actual host and port)
 REDIS_HOST = "localhost"
 REDIS_PORT = 6379
-
+client = redis.Redis(REDIS_HOST, REDIS_PORT, db=0, decode_responses=True)
 def open_issue_return_window():
     issue_window = tk.Toplevel()
     issue_window.title("Issue/Return Book Management")
@@ -79,7 +80,7 @@ def open_issue_return_window():
         relief="raised",
         bd=3,
         cursor="hand2",
-        command=search_issued_books_ui
+        command=lambda: SearchIssuedBooks(client)
     ).pack(pady=10)
 
 def issue_book_ui():
@@ -254,7 +255,53 @@ def return_book_ui():
 
     return jsonify(response)
 
+def SearchIssuedBooks(client):
+    
+    r = redis.Redis(REDIS_HOST, REDIS_PORT, db=0, decode_responses=True)
 
+    # Prompt the user to enter Member No
+    root = tk.Tk()
+    root.withdraw() 
+    mno = simpledialog.askstring("Search Issued Books", "Enter Member No to search issued book:")
+    
+    if not mno:
+        messagebox.showinfo("Search Cancelled", "No Member No entered.")
+        return
+
+    res = search_by(client, mno, search_type="mno")
+    Rec_count = 0
+
+    if res.total > 0:
+        output_text = ""
+        for issue in res.docs:
+            data = issue.__dict__
+            bno = issue.id.split(":")[-1]
+
+            Rec_count += 1
+            output_text += "=============================================================\n"
+            output_text += f"1. Book Code : {bno}\n"
+            output_text += f"2. Member Code : {data['mno']}\n"
+            output_text += f"3. Date of Issue : {data['d_o_issue']}\n"
+            output_text += f"4. Date of Return : {data['d_o_ret']}\n"
+            output_text += "=============================================================\n"
+
+        # Show results in a new popup window
+        result_window = tk.Toplevel()
+        result_window.title(f"{Rec_count} Record(s) Found")
+
+        text_widget = tk.Text(result_window, wrap="word", width=80, height=30)
+        text_widget.insert(tk.END, output_text)
+        text_widget.config(state=tk.DISABLED)
+        text_widget.pack(padx=10, pady=10)
+
+        # Add a button to close
+        close_btn = tk.Button(result_window, text="Close", command=result_window.destroy)
+        close_btn.pack(pady=5)
+
+    else:
+        messagebox.showinfo("No Records", f"No records for Member No: {mno} found.")
+
+    r.close()
     return render_template('search_form.html')
 
     search_form = tk.Toplevel()
@@ -264,7 +311,7 @@ def return_book_ui():
     entry_mno = tk.Entry(search_form)
     entry_mno.pack()
 
-    tk.Button(search_form, text="Search", command=submit_search).pack(pady=10)
+    tk.Button(search_form, text="Search", command=search_books).pack(pady=10)
 
     result_text = tk.Text(search_form, height=10, width=50)
     result_text.pack()
