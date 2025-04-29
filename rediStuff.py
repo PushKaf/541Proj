@@ -57,7 +57,7 @@ def create_index(index_name, table_name, schema):
         client.info()
         print("Index Already Created.")
     except redis.ResponseError:
-        print(f"Creating Index: {index_name} for table: {table_name} w/ schema: {schema}")
+        print(f"Creating Index: {index_name} for table: {table_name} w/ schema.")
         client.create_index(schema, definition=idx_def) 
 
     return client
