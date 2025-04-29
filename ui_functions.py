@@ -12,7 +12,6 @@ from datetime import date
 from flask import Flask, request, jsonify, render_template
 
 from const import REDIS_HOST, REDIS_PORT, ISSUE_TABLE
-from rediStuff import search_by
 
 
 app = Flask(__name__)
@@ -476,7 +475,7 @@ def show_book_management():
     global search_entry
     search_entry = tk.Entry(root, width=40, font=("Arial", 12), bg="white", fg="black")
     search_entry.pack(pady=10)
-
+    root.geometry("900x700")
     search_button = tk.Button(
         root, 
         text="Search", 
