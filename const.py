@@ -36,7 +36,7 @@ ISSUE_DATA_MAP = {
 BOOK_RECORD_TABLE = "bookrecord"
 BOOK_RECORD_SCHEMA = (
     TextField("bname", weight=5),
-    TextField("author", weight=3)
+    TextField("auth", weight=3)
 )
 
 MEMBER_TABLE = "member"

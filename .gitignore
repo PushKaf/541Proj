@@ -1,4 +1,5 @@
 __pycache__
+.vscode
 
 book_records.csv
 issue_records.csv

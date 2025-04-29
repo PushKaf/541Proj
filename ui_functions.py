@@ -3,23 +3,21 @@
 #MODULE : LIBRARY MANAGEMENT
 from tkinter import simpledialog
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import messagebox, ttk
 import redis
 import time
 from rediStuff import search_by
 from const import BOOK_RECORD_TABLE
+from Database import issue_client, bkr_client
 from datetime import date
 from flask import Flask, request, jsonify, render_template
 
-from const import REDIS_HOST, REDIS_PORT, ISSUE_TABLE
+from const import REDIS_HOST, REDIS_PORT, ISSUE_TABLE, MEMBER_TABLE
 
 
 app = Flask(__name__)
 
-# Redis configuration (Update with your actual host and port)
-REDIS_HOST = "localhost"
-REDIS_PORT = 6379
-client = redis.Redis(REDIS_HOST, REDIS_PORT, db=0, decode_responses=True)
+
 def open_issue_return_window():
     issue_window = tk.Toplevel()
     issue_window.title("Issue/Return Book Management")
@@ -79,7 +77,7 @@ def open_issue_return_window():
         relief="raised",
         bd=3,
         cursor="hand2",
-        command=lambda: SearchIssuedBooks(client)
+        command=SearchIssuedBooks
     ).pack(pady=10)
 
 def issue_book_ui():
@@ -254,7 +252,7 @@ def return_book_ui():
 
     return jsonify(response)
 
-def SearchIssuedBooks(client):
+def SearchIssuedBooks():
     
     r = redis.Redis(REDIS_HOST, REDIS_PORT, db=0, decode_responses=True)
 
@@ -267,7 +265,7 @@ def SearchIssuedBooks(client):
         messagebox.showinfo("Search Cancelled", "No Member No entered.")
         return
 
-    res = search_by(client, mno, search_type="mno")
+    res = search_by(issue_client, mno, search_type="mno")
     Rec_count = 0
 
     if res.total > 0:
@@ -315,6 +313,19 @@ def SearchIssuedBooks(client):
     result_text = tk.Text(search_form, height=10, width=50)
     result_text.pack()
 
+def show_member_search():
+    title_label = tk.Label(
+        root, 
+        text="🔎 Search by Member Code (MNO):",
+        font=("Lucida Console", 14, "bold"),
+        bg="#0056b3",   
+        fg="white"       
+    )
+
+    search_entry = tk.Entry(root, width=40, font=("Arial", 12), bg="white", fg="black")
+    search_entry.pack(pady=10)
+
+    
 
 def open_member_management():
     # Create new window
@@ -349,11 +360,74 @@ def open_member_management():
         command=insert_member_ui
     ).pack(pady=20)
 
+        # Insert Button
+    tk.Button(
+        member_window,
+        text="🔎 Search by Member Code (MNO)",
+        width=25,
+        height=2,
+        font=("Arial", 12, "bold"),
+        bg="white",
+        fg="#0056b3",
+        activebackground="#e6e6e6",
+        activeforeground="#0056b3",
+        relief="raised",
+        bd=3,
+        cursor="hand2",
+        command=lambda: messagebox.showinfo("Not Implemented", "This feature is yet to be implemented.")
+    ).pack(pady=20)
+
+def _does_mno_exist(r, mno):
+    table_key = f"{MEMBER_TABLE}:{mno}"
+
+    if r.exists(table_key):
+        return True
+    
+    return False
+
+def insert_member(prev_window, entries):
+    mno = entries["Member Code"].get().strip()
+    mname = entries["Member Name"].get().strip()
+    dd = entries["Date"].get()
+    mm = entries["Month"].get()
+    yy = entries["Year"].get()
+    addr = entries["Address"].get().strip()
+    mob = entries["Mobile No."].get().strip()
+
+    if not mno:
+        messagebox.showwarning("No Member Code", f"Member Code Field is NOT given.\n")
+        prev_window.destroy()  
+        return
+
+    r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=0, decode_responses=True, socket_connect_timeout=30)
+
+    table_key = f"{BOOK_RECORD_TABLE}:{mno}"
+
+    if _does_mno_exist(r, mno):
+        messagebox.showwarning("Member Exists", f"Member with code: {mno} already exists.\n")
+        prev_window.destroy()  
+        return
+
+    mem_map = {
+        "mname": mname,
+        "date_of_membership": f"{dd}/{mm}/{yy}",
+        "addr": addr,
+        "mob": mob
+    }
+
+    start_time = time.time()
+    r.hset(table_key, mapping=mem_map)
+    elapsed_time = round(time.time() - start_time, 7)
+
+    messagebox.showinfo("Inserted Member", f"Inserted member: {mno} in {elapsed_time}s")
+    
+    prev_window.destroy()
+
 def insert_member_ui():
     # New small window for inserting member
     insert_window = tk.Toplevel()
     insert_window.title("Insert Member")
-    insert_window.geometry("400x550")
+    insert_window.geometry("400x650")
     insert_window.configure(bg="#0056b3")  # Darker blue background
 
     # Title
@@ -400,6 +474,7 @@ def insert_member_ui():
         font=("Arial", 12, "bold"),
         bg="white",
         fg="#0056b3",
+        command=lambda: insert_member(insert_window, entries),
         activebackground="#e6e6e6",
         activeforeground="#0056b3",
         relief="raised",
@@ -416,47 +491,91 @@ def _does_bno_exist(r, bno):
     
     return False
 
-def search_books():
-    bno = search_entry.get()
+def search_books(dropdown, val_dict):
+    search_type = val_dict[dropdown.get()]
+    entry = search_entry.get().strip()
+
+    if not entry:
+        messagebox.showwarning("Input Error", f"Please enter a {dropdown.get()}.")
+        return
     
-    if not bno:
-        messagebox.showwarning("Input Error", "Please enter a Book Code or Name.")
-        return
-
     r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=0, decode_responses=True, socket_connect_timeout=30)
-
-    table_key = f"{BOOK_RECORD_TABLE}:{bno}"
-
-    if not _does_bno_exist(r, bno):
-        results_text.insert(tk.END, "No matching books found.\n")
-        summary_label.config(text="0 books found in 0 seconds")
-        r.close()  
-        return
-
-    start_time = time.time()
-    book = r.hgetall(table_key)
-    elapsed_time = round(time.time() - start_time, 7)
-
     results_text.delete("1.0", tk.END)
-    record_count = 0
+    
+    if search_type == "bno":
+        print("BNO")
+        table_key = f"{BOOK_RECORD_TABLE}:{entry}"
 
-    if book:
-        result = (
-            f"Book Code: {bno}\nBook Name: {book.get('bname', 'N/A')}\nAuthor: {book.get('auth', 'N/A')}\n"
-            f"Price: {book.get('price', 'N/A')}\nPublisher: {book.get('publ', 'N/A')}\n"
-            f"Quantity: {book.get('qty', 'N/A')}\nPurchased On: {book.get('date', 'N/A')}\n"
-            + "="*50 + "\n"
-        )
-        results_text.insert(tk.END, result)
-        record_count += 1
+        if not _does_bno_exist(r, entry):
+            results_text.insert(tk.END, "No matching books found.\n")
+            summary_label.config(text="0 books found in 0 seconds")
+            r.close()  
+            return
 
-    if record_count == 0:
-        results_text.insert(tk.END, "No matching books found.\n")
+        start_time = time.time()
+        book = r.hgetall(table_key)
+        elapsed_time = round(time.time() - start_time, 7)
 
-    # Update the UI summary with the count of records and time taken
-    summary_label.config(text=f"{record_count} book found in {elapsed_time} seconds")
+        record_count = 0
+
+        if book:
+            out = ""
+            out += "=============================================================\n"
+            out += f"Book Code \t\t:{entry}\n"
+            out += f"Book Name \t\t:{book.get('bname', 'N/A')}\n"
+            out += f"Author \t\t:{book.get('auth', 'N/A')}\n"
+            out += f"Price \t\t:{book.get('price', 'N/A')}\n"
+            out += f"Publisher \t\t:{book.get('publ', 'N/A')}\n"
+            out += f"Quantity \t\t:{book.get('qty', 'N/A')}\n"
+            out += f"Date \t\t:{book.get('date', 'N/A')}\n"
+            out += "=============================================================\n"
+            
+            results_text.insert(tk.END, out)
+            record_count += 1
+
+        if record_count == 0:
+            results_text.insert(tk.END, "No matching books found.\n")
+
+        # Update the UI summary with the count of records and time taken
+        summary_label.config(text=f"{record_count} book found in {elapsed_time} seconds")
+    
+    elif search_type in ["auth", "bname"]:
+        print(search_type, entry)
+        
+        start_time = time.time()
+        res = search_by(bkr_client, entry, search_type=search_type)
+        elapsed_time = round(time.time() - start_time, 7)
+        
+        print(res)
+        count = 0
+
+        if res.total > 0:
+            out = ""
+            for bkr in res.docs:
+                data = bkr.__dict__
+                bno = bkr.id.split(":")[-1]
+
+                out += "=============================================================\n"
+                out += f"Book Code \t\t:{bno}\n"
+                out += f"Book Name \t\t:{data.get('bname', 'N/A')}\n"
+                out += f"Author \t\t:{data.get('auth', 'N/A')}\n"
+                out += f"Price \t\t:{data.get('price', 'N/A')}\n"
+                out += f"Publisher \t\t:{data.get('publ', 'N/A')}\n"
+                out += f"Quantity \t\t:{data.get('qty', 'N/A')}\n"
+                out += f"Date \t\t:{data.get('date', 'N/A')}\n"
+                out += "=============================================================\n"
+                
+                count+=1
+
+            results_text.insert(tk.END, out)
+            
+            summary_label.config(text=f"{count} book found in {elapsed_time} seconds")
+            r.close()  # Close Redis connection
+        
+        else:
+            messagebox.showinfo("No Records", f"No records for {search_type}: {entry} found.")
+    
     r.close()  # Close Redis connection
-
 
 def show_book_management():
     for widget in root.winfo_children():
@@ -466,7 +585,7 @@ def show_book_management():
 
     title_label = tk.Label(
         root, 
-        text="🔎 Search Book by Code or Name:",
+        text="🔎 Search Book by",
         font=("Lucida Console", 14, "bold"),
         bg="#0056b3",   
         fg="white"       
@@ -475,6 +594,20 @@ def show_book_management():
 
     global search_entry
     search_entry = tk.Entry(root, width=40, font=("Arial", 12), bg="white", fg="black")
+
+    vals = {"Book Code": "bno", "Author": "auth", "Book Name": "bname"}
+    display_vals = list(vals.keys())
+    selected = tk.StringVar(value=display_vals[0])
+    
+    def on_select(event):
+        sel_text = selected.get()
+        sel_val = vals[sel_text]
+
+    dropdown = ttk.Combobox(root, textvariable=display_vals, values=display_vals, state="readonly")
+    dropdown.set("Book Code")
+    dropdown.bind("<<ComboboxSelected>>", on_select)
+    dropdown.pack()
+
     search_entry.pack(pady=10)
     root.geometry("900x700")
     search_button = tk.Button(
@@ -484,7 +617,7 @@ def show_book_management():
         bg="white",       
         fg="#0056b3",        
         font=("Arial", 12, "bold"),
-        command=search_books,
+        command=lambda: search_books(dropdown, vals),
         activebackground="#e6e6e6",
         activeforeground="#0056b3",
         relief="raised",
